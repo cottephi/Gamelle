@@ -147,52 +147,58 @@ if __name__ == '__main__':
   Dir = os.path.dirname(input_file)
   DIR = Path[0]
   File = os.path.basename(input_file)
-    
-  for LEM in range(0,LEM_number):
-    lemdir = str(DIR) + "/" + str(Dir) + "/LEM" + str(LEM)
-    if not os.path.isdir(lemdir):
-      os.makedirs(lemdir)
-    
-  shortVdet = lemdir + "/shortVdet"
-  
-  if os.path.isfile(shortVdet):
-    answer = raw_input("WARNING: shortVdet(s) already exist(s) for LEM " + str(LEM) + ", do you want to recreate it(them)? (yes/no) \n")
+
+  numlines = 0
+  l_long = ""
+  with open(input_file, "r") as inFile:
+    l = inFile.readlines()
+    l_long = " ".join(l)
+    numlines = len(l)
+    inFile.close()
+  ####################################################################################  
+  for previous_file in glob.glob(str(DIR) + "/" + str(Dir) + "/LEM*/shortVdet"):
+    answer = raw_input("Previous output found, do you want to recreate it(them)? (yes/no) \n")
     while answer != "no" and answer != "yes":
       answer = raw_input("Please answer by yes or no. \n")
-        
+    break
+  for previous_file in glob.glob(str(DIR) + "/" + str(Dir) + "/LEM*/shortVdet"):
     if answer == "no":
-      numlines = 0
-      with open(input_file, "r") as inFile:
-        l = inFile.readlines()
-        numlines = len(l)
-      inFile.close()
-      for i in range(0,LEM_number):
-        shortVdet = str(DIR) + "/" + str(Dir) + "/LEM" + str(i) + "/shortVdet"
-        with open(shortVdet, "r") as inFile:
-          l = inFile.readlines()
-          numlinesvdet = len(l)
-        os.system("time root -l -q -b \'plot_histo.C(\"" + str(DIR) + "/" + str(Dir) + "/LEM" + str(i) + "/\",\"" + str(i) + "\",\"" + str(numlines) + "\",\"" + str(numlinesvdet) + "\")\'")
-    
-      sys.exit(0)
-    
-    for folder in glob.glob(str(DIR) + "/" + str(Dir) + "/LEM*"): #if answer = yes
-      os.system("rm " + str(folder) + "/*")
-    
+      for LEM in range(0,LEM_number):
+        lemdir = str(DIR) + "/" + str(Dir) + "/LEM" + str(LEM)
+        shortVdet = str(DIR) + "/" + str(Dir) + "/LEM" + str(LEM) + "/shortVdet"
+        if os.path.isfile(shortVdet):
+          with open(shortVdet, "r") as inFile:
+            l = inFile.readlines()
+            numlinesvdet = len(l)
+            os.system("time root -l -q -b \'plot_histo.C(\"" + str(DIR) + "/" + str(Dir) + "/LEM" + str(LEM) + "/\",\"" + str(LEM) + "\",\"" + str(numlines) + "\",\"" + str(numlinesvdet) + "\")\'")
+      exit(0)
+    #######################################################################################  
+  print "Proceeding..."
+  for folder in glob.glob(str(DIR) + "/" + str(Dir) + "/LEM*"): #if answer = yes
+    if os.listdir(folder):
+      shutil.rmtree(folder)
+  
   print ("Please indicate, for each LEM, the channels corresponding to the low and high voltages. If one is at ground, write 'ground' \n")
   
   dict_LEM_channel = {}
   already_chosen = []
+  
   for i in range(0,LEM_number):
+    lemdir = str(DIR) + "/" + str(Dir) + "/LEM" + str(i)
+    if not os.path.isdir(lemdir):
+      os.makedirs(lemdir)   
     dict_LEM_channel["LEM" + str(i)] = [0,0]
     for j in range (0,2):
       if j == 0:
         volt = "low"
       if j == 1:
         volt = "high"
-      channel = raw_input("LEM " + str(i) + ", " + volt + " voltage: \n")
-      while channel != "0" and channel != "1" and channel != "2" and channel != "3" and channel != "ground" or channel in already_chosen:
+      channel = raw_input("LEM " + str(i) + ", " + volt + " voltage: \n")   
+      while channel != "0" and channel != "1" and channel != "2" and channel != "3" and channel != "ground" or channel in already_chosen or ( (channel == "0" or channel == "1" or channel == "2" or channel == "3") and "Ch"+channel not in l_long):
         if channel in already_chosen:
           channel = raw_input("Channel already set as another voltage or for another LEM. Try again! \n")
+        if (channel == "0" or channel == "1" or channel == "2" or channel == "3") and "Ch"+channel not in l_long:
+          channel = raw_input("Ch" + channel + " not found in input file. Try again!\n")
         else:
           channel = raw_input("Channel is not an integer between 0 and 3 or 'ground'. Try again! \n")        
       if channel != "ground":
@@ -208,24 +214,22 @@ if __name__ == '__main__':
   os.system("sed -i \'s/\\//_/g\' " + input_file)  
   
   with open(input_file, "r") as inFile:
-    l = inFile.readlines()
-    numlines = len(l)
     Chnumber = l[0].count("Ch")
     Chnumber2 = l[1].count("Ch")
     colnumber = len(l[0].split(" "))
     colnumber2 = len(l[1].split(" "))
+    if l[0].count("Heure") == 0:
+      print "ERROR: Header should have a column 'Heure'"
+      sys.exit(1)
     if colnumber != colnumber2:
       print "ERROR: Not same number of columns in header and rest of file"
       sys.exit(1)
     if Chnumber != Chnumber2:
       print "ERROR: Not same number of channels in header and rest of file"
       sys.exit(1)
-    if l[0].count("Heure") == 0:
-      print "ERROR: Should have a column 'Heure'"
-      sys.exit(1)
     for i in range(len(l)):
       if len(l[i].split(" ")) != colnumber:
-        print "ERROR: line " + str(i) + " is corrupted"
+        print "ERROR: line " + str(i) + " is corrupted. Please check it."
         sys.exit(1)
   print "Analysing file " + input_file + " with " + str(numlines) + " lines, " + str(colnumber) + " columns and " + str(Chnumber) + " channels"
     
@@ -246,9 +250,10 @@ if __name__ == '__main__':
         j += 1
       else:
         if k == colnumber:
-          variable = variable[:-1]
+          variable = variable[:-2]
         os.system("cut -d \' \' -f " + str(k) + " " + str(DIR) + "/" + str(Dir) + "/" + str(File) + " > " + adress + "/" + variable)
   
+ 
   if os.path.isfile("tmp0"):
       os.remove("tmp0")
   if os.path.isfile("tmp1"):
@@ -258,7 +263,9 @@ if __name__ == '__main__':
   if os.path.isfile("tmp3"):
       os.remove("tmp3")
   if os.path.isfile("tmp4"):
-      os.remove("tmp4")      
+      os.remove("tmp4")   
+  if os.path.isfile("0file"):
+      os.remove("0file")      
   if os.path.isdir("tmpdir1"):
       shutil.rmtree("tmpdir1")
 
@@ -278,17 +285,19 @@ if __name__ == '__main__':
     chLow = dict_LEM_channel["LEM" + str(i)][0]
     chHigh = dict_LEM_channel["LEM" + str(i)][1]
     if chHigh != "ground" and chLow == "ground":
-      os.system("paste <yes 0 | head -n $(cat " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/Vset | wc -l)) " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/Vset > tmp0")
+      os.system("yes 0 2>/dev/null | head -n $(cat " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/Vset | wc -l) > 0file")
+      os.system("paste 0file " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/Vset > tmp0")
       os.system("paste " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/Vdet tmp0 > tmp1")
-      os.system("paste <yes 0 | head -n $(cat tmp1 | wc -l)) tmp1 > tmp0")
+      os.system("paste 0file tmp1 > tmp0")
       os.system("paste " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/Imon tmp0 > tmp1")
       os.system("paste tmp1 Date > tmp0")
       os.system("paste tmp0 Heure > tmp1")
       os.system("paste tmp1 " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/SpT1 > LEM" + str(i) + "/DVDet")
       
     if chHigh == "ground" and chLow != "ground":
-      os.system("paste " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chLow + "/Vset  <yes 0 | head -n $(cat " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chLow + "/Vset | wc -l))> tmp0")
-      os.system("paste <yes 0 | head -n $(cat tmp1 | wc -l)) tmp1 > tmp0")
+      os.system("yes 0 2>/dev/null | head -n $(cat " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chHigh + "/Vset | wc -l) > 0file")
+      os.system("paste " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chLow + "/Vset  0file > tmp0")
+      os.system("paste 0file tmp1 > tmp0")
       os.system("paste " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chLow + "/Vdet tmp0 > tmp1")
       os.system("paste " + str(DIR) + "/" + str(Dir) + "/" + str(File)  + "_Ch" + chLow + "/Imon tmp0 > tmp1")
       os.system("paste tmp1 Date > tmp0")
@@ -317,11 +326,11 @@ if __name__ == '__main__':
     for stuff in glob.glob("tmpdir1/*"):
       os.system("sort -k6,7 " + stuff + " >> LEM" + str(i) + "/shortVdet")
         
-    os.system("rm -r tmpdir1 ; rm tmp0 ; rm tmp1 ; rm tmp2 ; rm tmp3 ; rm tmp4")
+    os.system("rm -r tmpdir1 ; rm tmp0 ; rm tmp1 ; rm tmp2 ; rm tmp3 ; rm tmp4 ; rm 0file")
     with open("LEM" + str(i) + "/shortVdet","r") as inFile:
       numlinesvdet=len(inFile.readlines())
       
     os.chdir(str(DIR))
     os.system("time root -l -q -b \'plot_histo.C(\"" + str(DIR) + "/" + str(Dir) + "/LEM" + str(i) + "/\",\"" + str(i) + "\",\"" + str(numlines) + "\",\"" + str(numlinesvdet) + "\")\'")
-
+    os.chdir(str(DIR) + "/" + str(Dir))
   sys.exit(0)
